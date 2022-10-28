@@ -25,8 +25,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
     }
 
-    external fun stringFromJNI(): String
-
     external fun startWatch(): Boolean
 
     fun startWatch(view: View) {

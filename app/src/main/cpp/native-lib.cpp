@@ -3,42 +3,12 @@
 #include <android/log.h>
 #include <unistd.h>
 #include <pthread.h>
+#include "managed_jnienv.h"
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_xfhy_watchsignaldemo_MainActivity_stringFromJNI(
-        JNIEnv* env,
-        jobject /* this */) {
-    std::string hello = "Hello from C++";
-    return env->NewStringUTF(hello.c_str());
-}
+static jclass utilClazz;
+static jmethodID printMainThreadTraceMethod;
 
-//bool SignalHandler::installHandlersLocked() {
-//    if (sHandlerInstalled) {
-//        return false;
-//    }
-//
-//    //sigaction函数的功能是检查或修改与指定信号相关联的处理动作, 函数原型：int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
-//    //signum参数指出要捕获的信号类型，act参数指定新的信号处理方式，oldact参数输出先前信号的处理方式（如果不为NULL的话）
-//    //建立一个Signal Handler,TARGET_SIG的定义: static const int TARGET_SIG = SIGQUIT;
-//    if (sigaction(TARGET_SIG, nullptr, &sOldHandlers) == -1) {
-//        return false;
-//    }
-//
-//    struct sigaction sa{};
-//    //方法地址,收到信号的地方,收到信号之后会调用signalHandler方法
-//    sa.sa_sigaction = signalHandler;
-//    sa.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
-//
-//    //将sa设置为Signal Handler
-//    if (sigaction(TARGET_SIG, &sa, nullptr) == -1) {
-//        return false;
-//    }
-//
-//    sHandlerInstalled = true;
-//    return true;
-//}
-
-void signalHandler(int sig, siginfo_t* info, void* uc) {
+void signalHandler(int sig, siginfo_t *info, void *uc) {
 //    int fromPid1 = info->_si_pad[3];
 //    int fromPid2 = info->_si_pad[4];
 //    int myPid = getpid();
@@ -52,6 +22,17 @@ void signalHandler(int sig, siginfo_t* info, void* uc) {
 //        pthread_detach(thd);
 //    }
     __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "我监听到信号了");
+
+    //todo xfhy 这里有问题
+    //'JNI DETECTED ERROR IN APPLICATION: JNI GetStaticMethodID called with pending exception java.lang.NoClassDefFoundError: Class not found using the boot class loader; no stack trace available
+    //    (Throwable with no stack trace)
+    //
+    //        in call to GetStaticMethodID
+    //        from void java.lang.Thread.sleep(java.lang.Object, long, int)'
+    JNIEnv *env = JniInvocation::getEnv();
+    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
+    printMainThreadTraceMethod = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
+    env->CallStaticVoidMethod(utilClazz, printMainThreadTraceMethod);
 }
 
 extern "C"
@@ -80,3 +61,14 @@ Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz)
     return sigaction(SIGQUIT, &sa, nullptr) == -1;
 }
 
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
+    JniInvocation::init(vm);
+
+    JNIEnv *env;
+    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK)
+        return -1;
+
+
+
+    return JNI_VERSION_1_6;
+}
