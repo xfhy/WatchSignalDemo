@@ -5,8 +5,13 @@
 #include <pthread.h>
 #include "managed_jnienv.h"
 
-static jclass utilClazz;
-static jmethodID printMainThreadTraceMethod;
+static struct StacktraceJNI {
+    jclass Util;
+    jmethodID Util_printMainThreadTrace;
+} gJ;
+
+static JavaVM *globalVm;
+static jobject g_ObjCall = NULL;
 
 void signalHandler(int sig, siginfo_t *info, void *uc) {
 //    int fromPid1 = info->_si_pad[3];
@@ -23,21 +28,32 @@ void signalHandler(int sig, siginfo_t *info, void *uc) {
 //    }
     __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "我监听到信号了");
 
-    //todo xfhy 这里有问题
-    //'JNI DETECTED ERROR IN APPLICATION: JNI GetStaticMethodID called with pending exception java.lang.NoClassDefFoundError: Class not found using the boot class loader; no stack trace available
-    //    (Throwable with no stack trace)
-    //
-    //        in call to GetStaticMethodID
-    //        from void java.lang.Thread.sleep(java.lang.Object, long, int)'
-    JNIEnv *env = JniInvocation::getEnv();
-    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
-    printMainThreadTraceMethod = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
-    env->CallStaticVoidMethod(utilClazz, printMainThreadTraceMethod);
+//    JNIEnv *env = JniInvocation::getEnv();
+    JNIEnv *env;
+    //从全局的JavaVM中获取到环境变量
+    //globalVm->AttachCurrentThread(&env, NULL);
+    globalVm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+//
+//    gJ.Util = env->GetObjectClass(g_ObjCall);
+//    gJ.Util_printMainThreadTrace = env->GetMethodID(gJ.Util, "printMainThreadTrace", "()V");
+//    env->CallStaticVoidMethod(gJ.Util, gJ.Util_printMainThreadTrace);
+
+    jclass  throwable_class = env->FindClass("java/lang/Throwable");
+    jmethodID  throwable_init = env->GetMethodID(throwable_class, "<init>", "(Ljava/lang/String;)V");
+    jobject throwable_obj = env->NewObject(throwable_class, throwable_init, env->NewStringUTF("hecheng"));
+
+
+    jmethodID throwable_mid = env->GetMethodID(throwable_class, "printStackTrace", "()V");
+    env->CallVoidMethod(throwable_obj, throwable_mid);
 }
 
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz) {
+
+    //env->GetJavaVM(&globalVm);
+
+
     sigset_t set, old_set;
     sigemptyset(&set);
     sigaddset(&set, SIGQUIT);
@@ -63,12 +79,22 @@ Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz)
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     JniInvocation::init(vm);
+    globalVm = vm;
 
     JNIEnv *env;
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK)
         return -1;
 
-
-
     return JNI_VERSION_1_6;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_xfhy_watchsignaldemo_Util_setClsRef(JNIEnv *env, jobject thiz) {
+    if (g_ObjCall == NULL) {
+        g_ObjCall = env->NewGlobalRef(thiz);//获取全局引用
+        if (thiz != NULL) {
+            env->DeleteLocalRef(thiz);
+        }//释放局部对象.这里可不要，调用结束后虚拟机会释放
+    }
 }

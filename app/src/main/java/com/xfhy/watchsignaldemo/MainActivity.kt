@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
-import android.widget.TextView
 import com.xfhy.watchsignaldemo.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -13,6 +12,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         init {
             System.loadLibrary("watchsignaldemo")
+            Util().setClsRef()
         }
     }
 
@@ -28,12 +28,18 @@ class MainActivity : AppCompatActivity() {
     external fun startWatch(): Boolean
 
     fun startWatch(view: View) {
+
+
         val result = startWatch()
         Log.d("xfhy_anr", "startWatch result = $result")
     }
 
     fun makeAnr(view: View) {
         SystemClock.sleep(20000)
+
+
+        //in call to CallStaticVoidMethodV
+        //        from void java.lang.Thread.sleep(java.lang.Object, long, int)'
     }
 
 }
