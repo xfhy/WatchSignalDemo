@@ -61,7 +61,7 @@ Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz)
     sa.sa_sigaction = signalHandler;
     sa.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
 
-    return sigaction(SIGQUIT, &sa, nullptr) == -1;
+    return sigaction(SIGQUIT, &sa, nullptr) == 0;
 }
 
 //android虚拟机执行到System.loadLibrary()函数时,会首先执行JNI_OnLoad.
