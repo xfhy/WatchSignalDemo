@@ -5,54 +5,43 @@
 #include <pthread.h>
 #include "managed_jnienv.h"
 
-static struct StacktraceJNI {
-    jclass Util;
-    jmethodID Util_printMainThreadTrace;
-} gJ;
+static jclass utilClazz;
+static jmethodID Util_printMainThreadTrace;
 
-static JavaVM *globalVm;
-static jobject g_ObjCall = NULL;
+void anrDumpCallback() {
+    JNIEnv *env = JniInvocation::getEnv();
+    if (!env) {
+        return;
+    }
+    env->CallStaticVoidMethod(utilClazz, Util_printMainThreadTrace);
+}
+
+static void *anrCallback(void *arg) {
+    //当前进程收到了其他进程发来的SIGQUIT信号,可能是当前进程发生ANR了,先质疑
+    anrDumpCallback();
+//    if (strlen(mAnrTraceFile) > 0) {
+//        //hook app进程发往系统进程的socket的write,
+//        hookAnrTraceWrite(false);
+//    }
+//    //重新转发信号
+//    sendSigToSignalCatcher();
+    return nullptr;
+}
 
 void signalHandler(int sig, siginfo_t *info, void *uc) {
-//    int fromPid1 = info->_si_pad[3];
-//    int fromPid2 = info->_si_pad[4];
-//    int myPid = getpid();
-//    //判断是否为自己进程发的SIGQUIT信号
-//    bool fromMySelf = fromPid1 == myPid || fromPid2 == myPid;
-//    if (sig == SIGQUIT) {
-//        pthread_t thd;
-//        if (!fromMySelf) {
-//            pthread_create(&thd, nullptr, anrCallback, nullptr);
-//        }
-//        pthread_detach(thd);
-//    }
     __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "我监听到信号了");
 
-//    JNIEnv *env = JniInvocation::getEnv();
-    JNIEnv *env;
-    //从全局的JavaVM中获取到环境变量
-    //globalVm->AttachCurrentThread(&env, NULL);
-    globalVm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
-//
-//    gJ.Util = env->GetObjectClass(g_ObjCall);
-//    gJ.Util_printMainThreadTrace = env->GetMethodID(gJ.Util, "printMainThreadTrace", "()V");
-//    env->CallStaticVoidMethod(gJ.Util, gJ.Util_printMainThreadTrace);
-
-    jclass  throwable_class = env->FindClass("java/lang/Throwable");
-    jmethodID  throwable_init = env->GetMethodID(throwable_class, "<init>", "(Ljava/lang/String;)V");
-    jobject throwable_obj = env->NewObject(throwable_class, throwable_init, env->NewStringUTF("hecheng"));
-
-
-    jmethodID throwable_mid = env->GetMethodID(throwable_class, "printStackTrace", "()V");
-    env->CallVoidMethod(throwable_obj, throwable_mid);
+    //创建线程,在线程里面去获取主线程堆栈
+    pthread_t thd;
+    pthread_create(&thd, nullptr, anrCallback, nullptr);
+    pthread_detach(thd);
 }
 
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz) {
-
-    //env->GetJavaVM(&globalVm);
-
+    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
+    Util_printMainThreadTrace = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
 
     sigset_t set, old_set;
     sigemptyset(&set);
@@ -77,24 +66,11 @@ Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz)
     return sigaction(SIGQUIT, &sa, nullptr) == -1;
 }
 
+//android虚拟机执行到System.loadLibrary()函数时,会首先执行JNI_OnLoad.
+//JNI_OnLoad有2个作用:
+//1. 告诉虚拟机,此C组件使用的是哪一个版本的JNI
+//2. 初始化一些开发者自己的东西
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     JniInvocation::init(vm);
-    globalVm = vm;
-
-    JNIEnv *env;
-    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK)
-        return -1;
-
     return JNI_VERSION_1_6;
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_xfhy_watchsignaldemo_Util_setClsRef(JNIEnv *env, jobject thiz) {
-    if (g_ObjCall == NULL) {
-        g_ObjCall = env->NewGlobalRef(thiz);//获取全局引用
-        if (thiz != NULL) {
-            env->DeleteLocalRef(thiz);
-        }//释放局部对象.这里可不要，调用结束后虚拟机会释放
-    }
 }

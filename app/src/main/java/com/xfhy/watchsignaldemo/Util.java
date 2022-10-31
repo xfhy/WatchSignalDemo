@@ -10,9 +10,7 @@ import android.util.Log;
  */
 public class Util {
 
-    public native void setClsRef();
-
-    public void printMainThreadTrace() {
+    public static void printMainThreadTrace() {
         StackTraceElement[] stackTrace = Looper.getMainLooper().getThread().getStackTrace();
         StringBuilder stringBuilder = new StringBuilder();
         for (StackTraceElement stackTraceElement : stackTrace) {
