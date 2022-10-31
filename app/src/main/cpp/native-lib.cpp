@@ -6,14 +6,14 @@
 #include "managed_jnienv.h"
 
 static jclass utilClazz;
-static jmethodID Util_printMainThreadTrace;
+static jmethodID utilPrintMainThreadTrace;
 
 void anrDumpCallback() {
     JNIEnv *env = JniInvocation::getEnv();
     if (!env) {
         return;
     }
-    env->CallStaticVoidMethod(utilClazz, Util_printMainThreadTrace);
+    env->CallStaticVoidMethod(utilClazz, utilPrintMainThreadTrace);
 }
 
 static void *anrCallback(void *arg) {
@@ -29,8 +29,9 @@ static void *anrCallback(void *arg) {
 }
 
 void signalHandler(int sig, siginfo_t *info, void *uc) {
-    __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "我监听到信号了");
+    __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "我监听到SIGQUIT信号了,可能发生anr了");
 
+    //这里必须得新起一个线程去dump主线程堆栈,否则的话,这里是主线程,主线程本来就卡住了,你还给它增加负担,这是不合适的
     //创建线程,在线程里面去获取主线程堆栈
     pthread_t thd;
     pthread_create(&thd, nullptr, anrCallback, nullptr);
@@ -40,9 +41,6 @@ void signalHandler(int sig, siginfo_t *info, void *uc) {
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz) {
-    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
-    Util_printMainThreadTrace = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
-
     sigset_t set, old_set;
     sigemptyset(&set);
     sigaddset(&set, SIGQUIT);
@@ -72,5 +70,10 @@ Java_com_xfhy_watchsignaldemo_MainActivity_startWatch(JNIEnv *env, jobject thiz)
 //2. 初始化一些开发者自己的东西
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     JniInvocation::init(vm);
+
+    JNIEnv *env = JniInvocation::getEnv();
+    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
+    utilPrintMainThreadTrace = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
+
     return JNI_VERSION_1_6;
 }
