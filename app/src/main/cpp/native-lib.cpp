@@ -13,6 +13,7 @@ void anrDumpCallback() {
     if (!env) {
         return;
     }
+    __android_log_print(ANDROID_LOG_DEBUG, "xfhy_anr", "dump mainThread trace");
     env->CallStaticVoidMethod(utilClazz, utilPrintMainThreadTrace);
 }
 
@@ -72,8 +73,12 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
     JniInvocation::init(vm);
 
     JNIEnv *env = JniInvocation::getEnv();
-    utilClazz = env->FindClass("com/xfhy/watchsignaldemo/Util");
-    utilPrintMainThreadTrace = env->GetStaticMethodID(utilClazz, "printMainThreadTrace", "()V");
+    jclass localClass = env->FindClass("com/xfhy/watchsignaldemo/Util");
+    utilPrintMainThreadTrace = env->GetStaticMethodID(localClass, "printMainThreadTrace", "()V");
+
+    //https://developer.android.com/training/articles/perf-jni#local-and-global-references
+    // 获取非局部引用的唯一方法是通过 NewGlobalRef 和 NewWeakGlobalRef 函数。
+    utilClazz = reinterpret_cast<jclass>(env->NewGlobalRef(localClass));
 
     return JNI_VERSION_1_6;
 }
